@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -9,33 +9,59 @@ import {
 } from '../api/salesforce'
 import RulesTable from '../components/RulesTable'
 import BulkActions from '../components/BulkActions'
+import TableSkeleton from '../components/TableSkeleton'
+
+const NOTICE_DISMISS_MS = 4000
 
 function DashboardPage() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
   const [rules, setRules] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
-  const [togglingIds, setTogglingIds] = useState(new Set())
-  const [bulkBusy, setBulkBusy] = useState(false)
   const [notice, setNotice] = useState(null)
+  const [togglingIds, setTogglingIds] = useState(new Set())
+  const [activeAction, setActiveAction] = useState(null)
 
-  const loadRules = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await getValidationRules()
-      setRules(data)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+  const noticeTimerRef = useRef(null)
+
+  const showNotice = useCallback((msg) => {
+    setNotice(msg)
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
+    noticeTimerRef.current = setTimeout(() => {
+      setNotice(null)
+      noticeTimerRef.current = null
+    }, NOTICE_DISMISS_MS)
   }, [])
 
   useEffect(() => {
-    loadRules()
+    return () => {
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
+    }
+  }, [])
+
+  const loadRules = useCallback(
+    async ({ initial = false } = {}) => {
+      if (initial) setInitialLoading(true)
+      else setRefreshing(true)
+      setError(null)
+      try {
+        const data = await getValidationRules()
+        setRules(data)
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        if (initial) setInitialLoading(false)
+        else setRefreshing(false)
+      }
+    },
+    []
+  )
+
+  useEffect(() => {
+    loadRules({ initial: true })
   }, [loadRules])
 
   const handleToggle = async (id, active) => {
@@ -58,33 +84,43 @@ function DashboardPage() {
   }
 
   const handleBulkToggle = async (active) => {
-    setBulkBusy(true)
+    setActiveAction(active ? 'activate' : 'deactivate')
     setError(null)
     try {
       await bulkToggle(active)
-      await loadRules()
-      setNotice(
+      const data = await getValidationRules()
+      setRules(data)
+      showNotice(
         `${active ? 'Activated' : 'Deactivated'} all validation rules.`
       )
     } catch (err) {
       setError(err.message)
     } finally {
-      setBulkBusy(false)
+      setActiveAction(null)
     }
   }
 
   const handleDeploy = async () => {
-    setBulkBusy(true)
+    setActiveAction('deploy')
     setError(null)
     try {
       const result = await deploy()
-      setNotice(
+      showNotice(
         `Deploy succeeded. ${result.deployed ?? ''} rule(s) synced to Salesforce.`
       )
     } catch (err) {
       setError(err.message)
     } finally {
-      setBulkBusy(false)
+      setActiveAction(null)
+    }
+  }
+
+  const handleRefresh = async () => {
+    setActiveAction('refresh')
+    try {
+      await loadRules({ initial: false })
+    } finally {
+      setActiveAction(null)
     }
   }
 
@@ -92,6 +128,9 @@ function DashboardPage() {
     await logout()
     navigate('/')
   }
+
+  const busy =
+    initialLoading || refreshing || activeAction !== null || togglingIds.size > 0
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -119,23 +158,27 @@ function DashboardPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <p className="text-sm text-slate-500">
-            {loading
+            {initialLoading
               ? 'Loading rules…'
               : `${rules.length} rule${rules.length === 1 ? '' : 's'} • ${
                   rules.filter((r) => r.active).length
                 } active`}
           </p>
           <BulkActions
-            onRefresh={loadRules}
+            onRefresh={handleRefresh}
             onActivateAll={() => handleBulkToggle(true)}
             onDeactivateAll={() => handleBulkToggle(false)}
             onDeploy={handleDeploy}
-            busy={loading || bulkBusy}
+            busy={busy}
+            activeAction={activeAction}
           />
         </div>
 
         {error && (
-          <div className="mb-4 px-4 py-3 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700 flex items-start justify-between gap-4">
+          <div
+            role="alert"
+            className="mb-4 px-4 py-3 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700 flex items-start justify-between gap-4"
+          >
             <span>{error}</span>
             <button
               type="button"
@@ -148,11 +191,17 @@ function DashboardPage() {
         )}
 
         {notice && (
-          <div className="mb-4 px-4 py-3 rounded-lg border border-emerald-200 bg-emerald-50 text-sm text-emerald-700 flex items-start justify-between gap-4">
+          <div
+            role="status"
+            className="mb-4 px-4 py-3 rounded-lg border border-emerald-200 bg-emerald-50 text-sm text-emerald-700 flex items-start justify-between gap-4"
+          >
             <span>{notice}</span>
             <button
               type="button"
-              onClick={() => setNotice(null)}
+              onClick={() => {
+                if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
+                setNotice(null)
+              }}
               className="text-emerald-600 hover:text-emerald-800"
             >
               Dismiss
@@ -160,16 +209,22 @@ function DashboardPage() {
           </div>
         )}
 
-        {loading ? (
-          <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400">
-            Loading rules…
-          </div>
+        {initialLoading ? (
+          <TableSkeleton rows={5} />
         ) : (
-          <RulesTable
-            rules={rules}
-            onToggle={handleToggle}
-            togglingIds={togglingIds}
-          />
+          <div
+            className={`transition-opacity ${
+              refreshing || activeAction === 'activate' || activeAction === 'deactivate'
+                ? 'opacity-60'
+                : 'opacity-100'
+            }`}
+          >
+            <RulesTable
+              rules={rules}
+              onToggle={handleToggle}
+              togglingIds={togglingIds}
+            />
+          </div>
         )}
       </div>
     </div>
