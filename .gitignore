@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Environment variables (NEVER commit secrets)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Testing / coverage
+coverage/
+.nyc_output/
+
+# Vite cache
+.vite/
+
+# Salesforce CLI artifacts (in case you use sfdx later)
+.sf/
+.sfdx/
+.localdevserver/
+
+# Misc
+*.pid
+*.seed
+*.pid.lock
