@@ -1,8 +1,8 @@
 import apiClient from './client'
 
-// Flip to false once the backend is wired up.
-// While true, all API calls return fake data so the UI can be built/tested in isolation.
-const USE_MOCKS = true
+// Set to true to bypass the backend and return seeded fake data — useful when
+// iterating on the UI without a Salesforce session.
+const USE_MOCKS = false
 
 const MOCK_DELAY_MS = 400
 

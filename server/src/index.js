@@ -7,6 +7,8 @@ import cookieParser from 'cookie-parser'
 import config from './config.js'
 import authRouter from './routes/auth.js'
 import meRouter from './routes/me.js'
+import rulesRouter from './routes/rules.js'
+import errorHandler from './middleware/errorHandler.js'
 
 const app = express()
 
@@ -46,22 +48,13 @@ app.get('/health', (req, res) => {
 
 app.use('/auth', authRouter)
 app.use('/api/me', meRouter)
+app.use('/api/validation-rules', rulesRouter)
 
 app.use((req, res) => {
   res.status(404).json({ error: { message: 'Not found', path: req.path } })
 })
 
-// eslint-disable-next-line no-unused-vars
-app.use((err, req, res, next) => {
-  console.error('[error]', err)
-  const status = err.status || 500
-  res.status(status).json({
-    error: {
-      message: err.message || 'Internal Server Error',
-      code: err.code,
-    },
-  })
-})
+app.use(errorHandler)
 
 app.listen(config.port, () => {
   console.log(`[server] Listening on http://localhost:${config.port}`)

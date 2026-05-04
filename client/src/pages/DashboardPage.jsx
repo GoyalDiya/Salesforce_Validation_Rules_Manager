@@ -142,8 +142,10 @@ function DashboardPage() {
             </h1>
             <p className="text-slate-500 text-sm">
               Manage Account validation rules in your Salesforce org.
-              {user?.mocked && (
-                <span className="ml-2 text-amber-600">(mock session)</span>
+              {user?.displayName && (
+                <span className="ml-2 text-slate-600">
+                  Signed in as {user.displayName}
+                </span>
               )}
             </p>
           </div>

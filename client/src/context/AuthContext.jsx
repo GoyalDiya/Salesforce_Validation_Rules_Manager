@@ -38,18 +38,12 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
-  // Dev-only: bypass real OAuth so we can build the UI before the backend exists.
-  const devMockLogin = () => {
-    setUser({ name: 'Dev User', email: 'dev@local', mocked: true })
-  }
-
   const value = {
     user,
     isLoggedIn: !!user,
     loading,
     login,
     logout,
-    devMockLogin,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

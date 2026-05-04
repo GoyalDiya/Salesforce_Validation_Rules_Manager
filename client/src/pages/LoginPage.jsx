@@ -1,9 +1,21 @@
-import { Navigate, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 function LoginPage() {
-  const { isLoggedIn, loading, login, devMockLogin } = useAuth()
+  const { isLoggedIn, loading, login } = useAuth()
+  const location = useLocation()
   const navigate = useNavigate()
+  const [authError, setAuthError] = useState(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const err = params.get('auth_error')
+    if (err) {
+      setAuthError(err)
+      navigate(location.pathname, { replace: true })
+    }
+  }, [location, navigate])
 
   if (loading) {
     return (
@@ -17,11 +29,6 @@ function LoginPage() {
     return <Navigate to="/dashboard" replace />
   }
 
-  const handleMockLogin = () => {
-    devMockLogin()
-    navigate('/dashboard')
-  }
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
       <div className="w-full max-w-md text-center p-8 rounded-xl shadow bg-white border border-slate-200">
@@ -32,6 +39,13 @@ function LoginPage() {
           Connect your Salesforce org to view and manage Account validation rules.
         </p>
 
+        {authError && (
+          <div className="mb-4 px-4 py-3 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700 text-left">
+            <strong className="block">Login failed</strong>
+            <span>{authError}</span>
+          </div>
+        )}
+
         <button
           type="button"
           onClick={login}
@@ -39,18 +53,6 @@ function LoginPage() {
         >
           Connect to Salesforce
         </button>
-
-        <button
-          type="button"
-          onClick={handleMockLogin}
-          className="mt-3 w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg transition text-sm"
-        >
-          Mock login (dev only)
-        </button>
-
-        <p className="mt-6 text-xs text-slate-400">
-          The mock button bypasses OAuth so the UI is testable before the backend is ready.
-        </p>
       </div>
     </div>
   )
