@@ -1,21 +1,21 @@
 import { useEffect, useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { Navigate, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/useAuth'
+
+function readAuthErrorFromUrl() {
+  if (typeof window === 'undefined') return null
+  return new URLSearchParams(window.location.search).get('auth_error')
+}
 
 function LoginPage() {
   const { isLoggedIn, loading, login } = useAuth()
-  const location = useLocation()
   const navigate = useNavigate()
-  const [authError, setAuthError] = useState(null)
+  const [authError] = useState(readAuthErrorFromUrl)
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const err = params.get('auth_error')
-    if (err) {
-      setAuthError(err)
-      navigate(location.pathname, { replace: true })
-    }
-  }, [location, navigate])
+    if (!authError) return
+    navigate(window.location.pathname, { replace: true })
+  }, [authError, navigate])
 
   if (loading) {
     return (

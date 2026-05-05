@@ -12,12 +12,22 @@ import errorHandler from './middleware/errorHandler.js'
 
 const app = express()
 
+// Trust the first proxy in front of us (dev tunnel, Render, etc).
+// Required so secure cookies + req.protocol respect X-Forwarded-Proto.
+app.set('trust proxy', 1)
+
+const allowedOrigins = config.clientOrigins
+
 app.use(morgan('dev'))
 app.use(express.json())
 app.use(cookieParser())
 app.use(
   cors({
-    origin: config.clientOrigin,
+    origin(origin, cb) {
+      if (!origin) return cb(null, true) // same-origin / curl / mobile
+      if (allowedOrigins.includes(origin)) return cb(null, true)
+      cb(new Error(`CORS: origin ${origin} not allowed`))
+    },
     credentials: true,
   })
 )
@@ -30,8 +40,10 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: config.isProduction,
+      // Cross-site (Vercel frontend ↔ tunnel/Render backend) requires None+Secure.
+      // 'lax' is fine for same-origin localhost dev.
+      sameSite: config.crossSiteCookies ? 'none' : 'lax',
+      secure: config.crossSiteCookies || config.isProduction,
       maxAge: 1000 * 60 * 60 * 24, // 24 hours
     },
   })
@@ -58,5 +70,6 @@ app.use(errorHandler)
 
 app.listen(config.port, () => {
   console.log(`[server] Listening on http://localhost:${config.port}`)
-  console.log(`[server] CORS allowed origin: ${config.clientOrigin}`)
+  console.log(`[server] CORS allowed origins: ${allowedOrigins.join(', ')}`)
+  console.log(`[server] Cross-site cookies: ${config.crossSiteCookies}`)
 })

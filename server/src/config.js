@@ -40,13 +40,24 @@ if (placeholders.length > 0) {
   )
 }
 
+const clientOrigins = process.env.CLIENT_ORIGIN.split(',')
+  .map((o) => o.trim())
+  .filter(Boolean)
+
 const config = {
   port: Number(process.env.PORT) || 3000,
   nodeEnv: process.env.NODE_ENV || 'development',
   isProduction: process.env.NODE_ENV === 'production',
 
+  // When true, session cookie is set with sameSite=none + secure=true so
+  // browsers will send it on cross-origin requests (Vercel ↔ tunnel/Render).
+  crossSiteCookies: process.env.CROSS_SITE_COOKIES === 'true',
+
   sessionSecret: process.env.SESSION_SECRET,
-  clientOrigin: process.env.CLIENT_ORIGIN,
+  // Full list (used for CORS allowlist). First entry is the canonical
+  // client origin used for post-OAuth redirects.
+  clientOrigins,
+  clientOrigin: clientOrigins[0],
 
   salesforce: {
     clientId: process.env.SF_CLIENT_ID,

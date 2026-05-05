@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../context/useAuth'
 import { getValidationRules, deployChanges } from '../api/salesforce'
 import RulesTable from '../components/RulesTable'
 import BulkActions from '../components/BulkActions'
@@ -54,6 +54,8 @@ function DashboardPage() {
   }, [])
 
   useEffect(() => {
+    // Fetch on mount — legitimate use of useEffect for loading external data.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadRules({ initial: true })
   }, [loadRules])
 
