@@ -5,7 +5,9 @@ function BulkActions({
   onDeactivateAll,
   onDeploy,
   onRefresh,
+  onDiscard,
   busy = false,
+  hasPending = false,
   activeAction = null,
 }) {
   const baseBtn =
@@ -37,7 +39,7 @@ function BulkActions({
         disabled={busy}
         className={`${baseBtn} bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100`}
       >
-        {renderLabel('activate', 'Activate All')}
+        Activate All
       </button>
       <button
         type="button"
@@ -45,12 +47,22 @@ function BulkActions({
         disabled={busy}
         className={`${baseBtn} bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100`}
       >
-        {renderLabel('deactivate', 'Deactivate All')}
+        Deactivate All
       </button>
+      {hasPending && (
+        <button
+          type="button"
+          onClick={onDiscard}
+          disabled={busy}
+          className={`${baseBtn} bg-white text-slate-600 border-slate-200 hover:bg-slate-50`}
+        >
+          Discard Changes
+        </button>
+      )}
       <button
         type="button"
         onClick={onDeploy}
-        disabled={busy}
+        disabled={busy || !hasPending}
         className={`${baseBtn} bg-blue-600 text-white border-blue-600 hover:bg-blue-700`}
       >
         {renderLabel('deploy', 'Deploy')}

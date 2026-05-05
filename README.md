@@ -96,14 +96,48 @@ Open the React app, click **Connect to Salesforce**, log in, and you'll land on 
 | `POST` | `/auth/logout` | Revokes token, destroys session |
 | `GET` | `/api/me` | Returns the current user (401 if not logged in) |
 | `GET` | `/api/validation-rules` | Lists Account validation rules |
-| `PATCH` | `/api/validation-rules/:id` | Body: `{ active: boolean }` — toggles one rule |
-| `POST` | `/api/validation-rules/bulk-toggle` | Body: `{ active: boolean }` — toggles all rules |
-| `POST` | `/api/validation-rules/deploy` | Re-applies current state to Salesforce |
+| `POST` | `/api/validation-rules/deploy` | Body: `{ changes: [{ id, active }, ...] }` — applies pending changes to Salesforce |
 | `GET` | `/health` | Liveness probe |
 
-All `/api/*` routes require an authenticated session.
+All `/api/*` routes require an authenticated session. Toggles in the UI update local state only — nothing is written to Salesforce until **Deploy** is clicked.
 
-## Deployment notes
+## Try it (for reviewers)
+
+The app is multi-tenant — it reads validation rules from whichever Salesforce org you log into. To test it end-to-end you need an org with at least one Account validation rule.
+
+### Quickest path: use a free Developer Edition org
+
+1. **Sign up** for a free Salesforce Developer Edition org at https://developer.salesforce.com/signup. Activation takes ~2 minutes (verify the email and set a password).
+2. **Create 2–3 simple validation rules on the Account object:**
+   - In Setup → Object Manager → Account → Validation Rules → **New**
+   - Example #1
+     - Rule Name: `Phone_Required`
+     - Active: ✅
+     - Error Condition Formula: `ISBLANK(Phone)`
+     - Error Message: `Phone number is required.`
+     - Error Location: Field: Phone
+   - Example #2
+     - Rule Name: `Industry_Required`
+     - Active: ❌ (leave inactive — useful for testing the toggle)
+     - Error Condition Formula: `ISBLANK(TEXT(Industry))`
+     - Error Message: `Please select an Industry.`
+     - Error Location: Field: Industry
+3. **Open the deployed app** (URL shared in the submission email).
+4. Click **Connect to Salesforce** → log in with your dev-org credentials → click **Allow** on the consent screen.
+5. The dashboard will show the rules you just created.
+
+### Walking through the features
+
+| Test | Expected |
+|---|---|
+| Toggle a single rule's switch | Row turns amber, "Pending" pill appears, header shows "1 unsaved change". **Salesforce is unchanged at this point.** |
+| Click **Deactivate All** | All rows turn amber if any were active |
+| Click **Discard Changes** | All pending state cleared, switches return to original |
+| Make changes → click **Deploy** | Spinner in button → green success banner → switch back to your Salesforce Setup tab → refresh the Account → Validation Rules page → see the changes are live |
+| Click **Refresh** | Re-fetches from Salesforce, discards any pending |
+| Click **Logout** | Returns to login page, session cleared |
+
+
 
 - **Frontend:** `npm run build` produces a static bundle in `client/dist/`. Host on Render / Vercel / Netlify.
 - **Backend:** deploy `server/` to Render / Railway. Set every variable from `server/.env.example` on the platform.

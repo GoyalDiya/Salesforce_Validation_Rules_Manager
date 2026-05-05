@@ -55,35 +55,23 @@ export async function getValidationRules() {
   return data.rules
 }
 
-export async function toggleRule(id, active) {
-  if (USE_MOCKS) {
-    await sleep(MOCK_DELAY_MS)
-    mockRules = mockRules.map((r) => (r.id === id ? { ...r, active } : r))
-    return { id, active }
-  }
-  const { data } = await apiClient.patch(`/api/validation-rules/${id}`, {
-    active,
-  })
-  return data
-}
-
-export async function bulkToggle(active) {
-  if (USE_MOCKS) {
-    await sleep(MOCK_DELAY_MS)
-    mockRules = mockRules.map((r) => ({ ...r, active }))
-    return { count: mockRules.length, active }
-  }
-  const { data } = await apiClient.post('/api/validation-rules/bulk-toggle', {
-    active,
-  })
-  return data
-}
-
-export async function deploy() {
+export async function deployChanges(changes) {
   if (USE_MOCKS) {
     await sleep(MOCK_DELAY_MS * 2)
-    return { status: 'success', deployed: mockRules.length }
+    for (const c of changes) {
+      mockRules = mockRules.map((r) =>
+        r.id === c.id ? { ...r, active: c.active } : r
+      )
+    }
+    return {
+      status: 'success',
+      deployed: changes.length,
+      total: changes.length,
+      failed: [],
+    }
   }
-  const { data } = await apiClient.post('/api/validation-rules/deploy')
+  const { data } = await apiClient.post('/api/validation-rules/deploy', {
+    changes,
+  })
   return data
 }

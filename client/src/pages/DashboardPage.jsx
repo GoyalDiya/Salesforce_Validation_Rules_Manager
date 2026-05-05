@@ -1,12 +1,7 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import {
-  getValidationRules,
-  toggleRule,
-  bulkToggle,
-  deploy,
-} from '../api/salesforce'
+import { getValidationRules, deployChanges } from '../api/salesforce'
 import RulesTable from '../components/RulesTable'
 import BulkActions from '../components/BulkActions'
 import TableSkeleton from '../components/TableSkeleton'
@@ -17,12 +12,12 @@ function DashboardPage() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  const [rules, setRules] = useState([])
+  const [originalRules, setOriginalRules] = useState([])
+  const [pendingRules, setPendingRules] = useState([])
   const [initialLoading, setInitialLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
-  const [togglingIds, setTogglingIds] = useState(new Set())
   const [activeAction, setActiveAction] = useState(null)
 
   const noticeTimerRef = useRef(null)
@@ -42,72 +37,75 @@ function DashboardPage() {
     }
   }, [])
 
-  const loadRules = useCallback(
-    async ({ initial = false } = {}) => {
-      if (initial) setInitialLoading(true)
-      else setRefreshing(true)
-      setError(null)
-      try {
-        const data = await getValidationRules()
-        setRules(data)
-      } catch (err) {
-        setError(err.message)
-      } finally {
-        if (initial) setInitialLoading(false)
-        else setRefreshing(false)
-      }
-    },
-    []
-  )
+  const loadRules = useCallback(async ({ initial = false } = {}) => {
+    if (initial) setInitialLoading(true)
+    else setRefreshing(true)
+    setError(null)
+    try {
+      const data = await getValidationRules()
+      setOriginalRules(data)
+      setPendingRules(data.map((r) => ({ ...r })))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      if (initial) setInitialLoading(false)
+      else setRefreshing(false)
+    }
+  }, [])
 
   useEffect(() => {
     loadRules({ initial: true })
   }, [loadRules])
 
-  const handleToggle = async (id, active) => {
-    setTogglingIds((prev) => new Set(prev).add(id))
-    setRules((prev) => prev.map((r) => (r.id === id ? { ...r, active } : r)))
-    try {
-      await toggleRule(id, active)
-    } catch (err) {
-      setError(err.message)
-      setRules((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, active: !active } : r))
-      )
-    } finally {
-      setTogglingIds((prev) => {
-        const next = new Set(prev)
-        next.delete(id)
-        return next
+  const pendingChanges = useMemo(() => {
+    const originalById = new Map(originalRules.map((r) => [r.id, r]))
+    return pendingRules
+      .filter((p) => {
+        const o = originalById.get(p.id)
+        return o && o.active !== p.active
       })
-    }
+      .map(({ id, active }) => ({ id, active }))
+  }, [originalRules, pendingRules])
+
+  const pendingIds = useMemo(
+    () => new Set(pendingChanges.map((c) => c.id)),
+    [pendingChanges]
+  )
+
+  const handleToggle = (id, active) => {
+    setPendingRules((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, active } : r))
+    )
   }
 
-  const handleBulkToggle = async (active) => {
-    setActiveAction(active ? 'activate' : 'deactivate')
+  const handleSetAll = (active) => {
+    setPendingRules((prev) => prev.map((r) => ({ ...r, active })))
+  }
+
+  const handleDiscard = () => {
+    setPendingRules(originalRules.map((r) => ({ ...r })))
     setError(null)
-    try {
-      await bulkToggle(active)
-      const data = await getValidationRules()
-      setRules(data)
-      showNotice(
-        `${active ? 'Activated' : 'Deactivated'} all validation rules.`
-      )
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setActiveAction(null)
-    }
   }
 
   const handleDeploy = async () => {
+    if (pendingChanges.length === 0) return
     setActiveAction('deploy')
     setError(null)
     try {
-      const result = await deploy()
-      showNotice(
-        `Deploy succeeded. ${result.deployed ?? ''} rule(s) synced to Salesforce.`
-      )
+      const result = await deployChanges(pendingChanges)
+      if (result.failed?.length) {
+        setError(
+          `${result.failed.length} of ${result.total} rule(s) failed to deploy. Refresh and try again.`
+        )
+      } else {
+        showNotice(
+          `Deployed ${result.deployed} change${
+            result.deployed === 1 ? '' : 's'
+          } to Salesforce.`
+        )
+      }
+      // Always refetch so the UI reflects what's actually in the org.
+      await loadRules({ initial: false })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -129,8 +127,9 @@ function DashboardPage() {
     navigate('/')
   }
 
-  const busy =
-    initialLoading || refreshing || activeAction !== null || togglingIds.size > 0
+  const hasPending = pendingChanges.length > 0
+  const busy = initialLoading || refreshing || activeAction !== null
+  const activeCount = pendingRules.filter((r) => r.active).length
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -160,18 +159,29 @@ function DashboardPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <p className="text-sm text-slate-500">
-            {initialLoading
-              ? 'Loading rules…'
-              : `${rules.length} rule${rules.length === 1 ? '' : 's'} • ${
-                  rules.filter((r) => r.active).length
-                } active`}
+            {initialLoading ? (
+              'Loading rules…'
+            ) : (
+              <>
+                {pendingRules.length} rule
+                {pendingRules.length === 1 ? '' : 's'} • {activeCount} active
+                {hasPending && (
+                  <span className="ml-2 text-amber-700">
+                    • {pendingChanges.length} unsaved change
+                    {pendingChanges.length === 1 ? '' : 's'}
+                  </span>
+                )}
+              </>
+            )}
           </p>
           <BulkActions
             onRefresh={handleRefresh}
-            onActivateAll={() => handleBulkToggle(true)}
-            onDeactivateAll={() => handleBulkToggle(false)}
+            onActivateAll={() => handleSetAll(true)}
+            onDeactivateAll={() => handleSetAll(false)}
+            onDiscard={handleDiscard}
             onDeploy={handleDeploy}
             busy={busy}
+            hasPending={hasPending}
             activeAction={activeAction}
           />
         </div>
@@ -216,15 +226,14 @@ function DashboardPage() {
         ) : (
           <div
             className={`transition-opacity ${
-              refreshing || activeAction === 'activate' || activeAction === 'deactivate'
-                ? 'opacity-60'
-                : 'opacity-100'
+              refreshing || activeAction === 'deploy' ? 'opacity-60' : 'opacity-100'
             }`}
           >
             <RulesTable
-              rules={rules}
+              rules={pendingRules}
               onToggle={handleToggle}
-              togglingIds={togglingIds}
+              pendingIds={pendingIds}
+              disabled={activeAction === 'deploy'}
             />
           </div>
         )}

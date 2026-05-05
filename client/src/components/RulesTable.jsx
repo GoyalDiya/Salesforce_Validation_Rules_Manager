@@ -1,7 +1,7 @@
 import StatusBadge from './StatusBadge'
 import ToggleSwitch from './ToggleSwitch'
 
-function RulesTable({ rules, onToggle, togglingIds = new Set() }) {
+function RulesTable({ rules, onToggle, pendingIds = new Set(), disabled = false }) {
   if (rules.length === 0) {
     return (
       <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400">
@@ -23,9 +23,12 @@ function RulesTable({ rules, onToggle, togglingIds = new Set() }) {
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rules.map((rule) => {
-            const isToggling = togglingIds.has(rule.id)
+            const isPending = pendingIds.has(rule.id)
             return (
-              <tr key={rule.id} className="hover:bg-slate-50/50">
+              <tr
+                key={rule.id}
+                className={isPending ? 'bg-amber-50/50' : 'hover:bg-slate-50/50'}
+              >
                 <td className="px-6 py-4">
                   <div className="font-medium text-slate-800">{rule.name}</div>
                   {rule.errorMessage && (
@@ -40,14 +43,24 @@ function RulesTable({ rules, onToggle, togglingIds = new Set() }) {
                   )}
                 </td>
                 <td className="px-6 py-4">
-                  <StatusBadge active={rule.active} />
+                  <div className="flex items-center gap-2">
+                    <StatusBadge active={rule.active} />
+                    {isPending && (
+                      <span
+                        title="Unsaved change — click Deploy to apply"
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200"
+                      >
+                        Pending
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="inline-flex">
                     <ToggleSwitch
                       checked={rule.active}
                       onChange={(next) => onToggle(rule.id, next)}
-                      disabled={isToggling}
+                      disabled={disabled}
                       label={`Toggle ${rule.name}`}
                     />
                   </div>

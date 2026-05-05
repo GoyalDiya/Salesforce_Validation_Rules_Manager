@@ -48,66 +48,31 @@ async function setRuleActive(conn, id, active) {
   return { id, active }
 }
 
-router.patch('/:id', async (req, res, next) => {
+router.post('/deploy', async (req, res, next) => {
   try {
-    if (typeof req.body?.active !== 'boolean') {
+    const changes = Array.isArray(req.body?.changes) ? req.body.changes : null
+    if (!changes) {
       return res
         .status(400)
-        .json({ error: { message: '`active` must be a boolean' } })
+        .json({ error: { message: '`changes` must be an array' } })
     }
-    const conn = getConnection(req)
-    const result = await setRuleActive(conn, req.params.id, req.body.active)
-    res.json(result)
-  } catch (err) {
-    next(err)
-  }
-})
-
-router.post('/bulk-toggle', async (req, res, next) => {
-  try {
-    if (typeof req.body?.active !== 'boolean') {
-      return res
-        .status(400)
-        .json({ error: { message: '`active` must be a boolean' } })
-    }
-    const { active } = req.body
-
-    const conn = getConnection(req)
-    const list = await conn.tooling.query(
-      `SELECT Id FROM ValidationRule WHERE EntityDefinition.DeveloperName = 'Account'`
-    )
-    const ids = list.records.map((r) => r.Id)
-
-    const failed = []
-    for (const id of ids) {
-      try {
-        await setRuleActive(conn, id, active)
-      } catch (err) {
-        failed.push({ id, message: err.message })
+    for (const c of changes) {
+      if (!c?.id || typeof c.active !== 'boolean') {
+        return res.status(400).json({
+          error: {
+            message: 'Each change must be `{ id: string, active: boolean }`',
+          },
+        })
       }
     }
 
-    res.json({
-      count: ids.length - failed.length,
-      total: ids.length,
-      active,
-      failed,
-    })
-  } catch (err) {
-    next(err)
-  }
-})
+    if (changes.length === 0) {
+      return res.json({ status: 'success', deployed: 0, total: 0, failed: [] })
+    }
 
-router.post('/deploy', async (req, res, next) => {
-  try {
     const conn = getConnection(req)
-    const list = await conn.tooling.query(
-      `SELECT Id, Active FROM ValidationRule WHERE EntityDefinition.DeveloperName = 'Account'`
-    )
-    const records = list.records.map((r) => ({ id: r.Id, active: !!r.Active }))
-
     const failed = []
-    for (const { id, active } of records) {
+    for (const { id, active } of changes) {
       try {
         await setRuleActive(conn, id, active)
       } catch (err) {
@@ -117,8 +82,8 @@ router.post('/deploy', async (req, res, next) => {
 
     res.json({
       status: failed.length === 0 ? 'success' : 'partial',
-      deployed: records.length - failed.length,
-      total: records.length,
+      deployed: changes.length - failed.length,
+      total: changes.length,
       failed,
     })
   } catch (err) {
@@ -127,4 +92,3 @@ router.post('/deploy', async (req, res, next) => {
 })
 
 export default router
-export { setRuleActive }
