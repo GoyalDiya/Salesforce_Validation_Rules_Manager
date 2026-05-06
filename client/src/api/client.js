@@ -9,6 +9,11 @@ const apiClient = axios.create({
   baseURL,
   withCredentials: true,
   timeout: 30_000,
+  headers: {
+    // Bypasses the ngrok free-tier browser interstitial. Harmless when the
+    // backend isn't behind ngrok — just an unrecognized header.
+    'ngrok-skip-browser-warning': '1',
+  },
 })
 
 apiClient.interceptors.response.use(
